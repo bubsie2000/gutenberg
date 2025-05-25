@@ -12,7 +12,6 @@
 			"type": "string",
 			"source": "html",
 			"selector": "blockquote",
-			"multiline": "p",
 			"default": "",
 			"role": "content"
 		},
