@@ -601,13 +601,12 @@ class WP_Theme_JSON_Gutenberg {
 		// The block classes are necessary to target older content that won't use the new class names.
 		'caption'   => '.wp-element-caption, .wp-block-audio figcaption, .wp-block-embed figcaption, .wp-block-gallery figcaption, .wp-block-image figcaption, .wp-block-table figcaption, .wp-block-video figcaption',
 		'cite'      => 'cite',
-		'textInput' => '.wp-element-text-input',
+		'textInput' => 'textarea, input:where([type=email],[type=number],[type=password],[type=search],[type=tel],[type=text],[type=tel],[type=url])',
 	);
 
 	const __EXPERIMENTAL_ELEMENT_CLASS_NAMES = array(
 		'button'    => 'wp-element-button',
 		'caption'   => 'wp-element-caption',
-		'textInput' => 'wp-element-text-input',
 	);
 
 	/**
