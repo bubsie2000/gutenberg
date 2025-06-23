@@ -193,6 +193,7 @@ export type DataFormControlProps< Item > = {
 
 export type DataViewRenderFieldProps< Item > = {
 	item: Item;
+	view?: View;
 };
 
 /**
