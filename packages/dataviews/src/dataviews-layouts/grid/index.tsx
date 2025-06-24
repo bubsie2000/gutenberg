@@ -54,6 +54,7 @@ interface GridItemProps< Item > {
 	regularFields: NormalizedField< Item >[];
 	badgeFields: NormalizedField< Item >[];
 	hasBulkActions: boolean;
+	sizes: string;
 }
 
 function GridItem< Item >( {
@@ -71,6 +72,7 @@ function GridItem< Item >( {
 	regularFields,
 	badgeFields,
 	hasBulkActions,
+	sizes,
 }: GridItemProps< Item > ) {
 	const { showTitle = true, showMedia = true, showDescription = true } = view;
 	const hasBulkAction = useHasAPossibleBulkAction( actions, item );
@@ -78,7 +80,7 @@ function GridItem< Item >( {
 	const instanceId = useInstanceId( GridItem );
 	const isSelected = selection.includes( id );
 	const renderedMediaField = mediaField?.render ? (
-		<mediaField.render item={ item } view={ view } />
+		<mediaField.render item={ item } sizes={ sizes } />
 	) : null;
 	const renderedTitleField =
 		showTitle && titleField?.render ? (
@@ -275,6 +277,19 @@ export default function ViewGrid< Item >( {
 				gridTemplateColumns: `repeat(${ usedPreviewSize }, minmax(0, 1fr))`,
 		  }
 		: {};
+
+	// Calculate possible media sizes in grid for responsive images.
+	let sizes =
+		'(max-width: 480px) 100vw, (max-width: 782px) 50vw, (max-width: 1080px) 30vw, (max-width: 1440px) 23vw, (max-width: 1920px) 18vw, 20vw';
+	if ( usedPreviewSize ) {
+		// Mobile size is always 100vw.
+		// Sizes smaller than 782px don't show the sidebar.
+		// The default calculation uses 400px as sidebar + grid padding.
+		// These are rough numbers so grid gap isn't included.
+		sizes = `(max-width: 480px) 100vw, (max-width: 782px) ${
+			100 / usedPreviewSize
+		}vw, calc( (100vw - 400px) / ${ usedPreviewSize } )`;
+	}
 	return (
 		<>
 			{ hasData && (
@@ -304,6 +319,7 @@ export default function ViewGrid< Item >( {
 								regularFields={ regularFields }
 								badgeFields={ badgeFields }
 								hasBulkActions={ hasBulkActions }
+								sizes={ sizes }
 							/>
 						);
 					} ) }
