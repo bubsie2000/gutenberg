@@ -279,16 +279,13 @@ export default function ViewGrid< Item >( {
 		: {};
 
 	// Calculate possible media sizes in grid for responsive images.
-	let sizes =
-		'(max-width: 480px) 100vw, (max-width: 782px) 50vw, (max-width: 1080px) 30vw, (max-width: 1440px) 23vw, (max-width: 1920px) 18vw, 20vw';
+	let sizes = '400px';
 	if ( usedPreviewSize ) {
 		// Mobile size is always 100vw.
 		// Sizes smaller than 782px don't show the sidebar.
 		// The default calculation uses 400px as sidebar + grid padding.
 		// These are rough numbers so grid gap isn't included.
-		sizes = `(max-width: 480px) 100vw, (max-width: 782px) ${
-			100 / usedPreviewSize
-		}vw, calc( (100vw - 400px) / ${ usedPreviewSize } )`;
+		sizes = `${ 100 / usedPreviewSize }vw`;
 	}
 	return (
 		<>
