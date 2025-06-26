@@ -1,19 +1,8 @@
 /**
- * External dependencies
- */
-import fastDeepEqual from 'fast-deep-equal/es6';
-
-/**
  * WordPress dependencies
  */
-import { useDebounce, usePrevious } from '@wordpress/compose';
-import {
-	useCallback,
-	useEffect,
-	useLayoutEffect,
-	useRef,
-	useState,
-} from '@wordpress/element';
+import { debounce } from '@wordpress/compose';
+import { useEffect, useState, useRef } from '@wordpress/element';
 import apiFetch from '@wordpress/api-fetch';
 import { addQueryArgs } from '@wordpress/url';
 import { __experimentalSanitizeBlockAttributes } from '@wordpress/blocks';
@@ -50,111 +39,84 @@ export function removeBlockSupportAttributes( attributes ) {
 }
 
 export function useServerSideRender( args ) {
-	const isMountedRef = useRef( false );
-	const fetchRequestRef = useRef();
-	const latestArgssRef = useRef( args );
-	const prevArgs = usePrevious( args );
-	const [ response, setResponse ] = useState( null );
-	const [ isLoading, setIsLoading ] = useState( false );
+	const [ response, setResponse ] = useState( { status: 'idle' } );
+	const shouldDebounceRef = useRef( false );
 
-	useLayoutEffect( () => {
-		latestArgssRef.current = args;
-	}, [ args ] );
+	const {
+		attributes,
+		block,
+		skipBlockSupportAttributes = false,
+		httpMethod = 'GET',
+		urlQueryArgs,
+	} = args;
 
-	const fetchData = useCallback( () => {
-		if ( ! isMountedRef.current ) {
-			return;
-		}
+	let sanitizedAttributes =
+		attributes &&
+		__experimentalSanitizeBlockAttributes( block, attributes );
 
-		const {
-			attributes,
-			block,
-			skipBlockSupportAttributes = false,
-			httpMethod = 'GET',
-			urlQueryArgs,
-		} = latestArgssRef.current;
+	if ( skipBlockSupportAttributes ) {
+		sanitizedAttributes =
+			removeBlockSupportAttributes( sanitizedAttributes );
+	}
 
-		setIsLoading( true );
+	// If httpMethod is 'POST', send the attributes in the request body instead of the URL.
+	// This allows sending a larger attributes object than in a GET request, where the attributes are in the URL.
+	const isPostRequest = 'POST' === httpMethod;
+	const urlAttributes = isPostRequest ? null : sanitizedAttributes;
+	const path = rendererPath( block, urlAttributes, urlQueryArgs );
+	const body = isPostRequest
+		? JSON.stringify( { attributes: sanitizedAttributes ?? null } )
+		: undefined;
 
-		let sanitizedAttributes =
-			attributes &&
-			__experimentalSanitizeBlockAttributes( block, attributes );
-
-		if ( skipBlockSupportAttributes ) {
-			sanitizedAttributes =
-				removeBlockSupportAttributes( sanitizedAttributes );
-		}
-
-		// If httpMethod is 'POST', send the attributes in the request body instead of the URL.
-		// This allows sending a larger attributes object than in a GET request, where the attributes are in the URL.
-		const isPostRequest = 'POST' === httpMethod;
-		const urlAttributes = isPostRequest
-			? null
-			: sanitizedAttributes ?? null;
-		const path = rendererPath( block, urlAttributes, urlQueryArgs );
-		const data = isPostRequest
-			? { attributes: sanitizedAttributes ?? null }
-			: null;
-
-		// Store the latest fetch request so that when we process it, we can
-		// check if it is the current request, to avoid race conditions on slow networks.
-		const fetchRequest = ( fetchRequestRef.current = apiFetch( {
-			path,
-			data,
-			method: isPostRequest ? 'POST' : 'GET',
-		} )
-			.then( ( fetchResponse ) => {
-				if (
-					isMountedRef.current &&
-					fetchRequest === fetchRequestRef.current &&
-					fetchResponse
-				) {
-					setResponse( fetchResponse.rendered );
-				}
-			} )
-			.catch( ( error ) => {
-				if (
-					isMountedRef.current &&
-					fetchRequest === fetchRequestRef.current
-				) {
-					setResponse( {
-						error: true,
-						errorMsg: error.message,
-					} );
-				}
-			} )
-			.finally( () => {
-				if (
-					isMountedRef.current &&
-					fetchRequest === fetchRequestRef.current
-				) {
-					setIsLoading( false );
-				}
-			} ) );
-
-		return fetchRequest;
-	}, [] );
-
-	const debouncedFetchData = useDebounce( fetchData, 500 );
-
-	// When the component unmounts, set isMountedRef to false. This will
-	// let the async fetch callbacks know when to stop.
 	useEffect( () => {
-		isMountedRef.current = true;
+		const controller = new AbortController();
+		const debouncedFetch = debounce(
+			function () {
+				{
+					setResponse( { status: 'loading' } );
+
+					apiFetch( {
+						path,
+						method: isPostRequest ? 'POST' : 'GET',
+						body,
+						headers: {
+							'Content-Type': 'application/json',
+						},
+						signal: controller.signal,
+					} )
+						.then( ( res ) => {
+							setResponse( {
+								status: 'success',
+								html: res ? res.rendered : '',
+							} );
+						} )
+						.catch( ( error ) => {
+							// The request was aborted, do not update the response.
+							if ( error.name === 'AbortError' ) {
+								return;
+							}
+
+							setResponse( {
+								status: 'error',
+								error: error.message,
+							} );
+						} )
+						.finally( () => {
+							// Debounce requests after first fetch.
+							shouldDebounceRef.current = true;
+						} );
+				}
+			},
+			shouldDebounceRef.current ? 500 : 0
+		);
+
+		debouncedFetch();
+
 		return () => {
-			isMountedRef.current = false;
+			controller.abort();
+			debouncedFetch.cancel();
 		};
-	}, [] );
+	}, [ path, isPostRequest, body ] );
 
-	useEffect( () => {
-		// Don't debounce the first fetch. This ensures that the first render
-		// shows data as soon as possible.
-		if ( prevArgs === undefined ) {
-			fetchData();
-		} else if ( ! fastDeepEqual( prevArgs, args ) ) {
-			debouncedFetchData();
-		}
-	} );
-
-	return { response, isLoading };
+	return response;
 }

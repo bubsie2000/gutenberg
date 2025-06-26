@@ -1,7 +1,7 @@
 /**
  * WordPress dependencies
  */
-import { RawHTML, useEffect, useState } from '@wordpress/element';
+import { RawHTML, useEffect, useState, useRef } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { Placeholder, Spinner } from '@wordpress/components';
 
@@ -18,11 +18,11 @@ function DefaultEmptyResponsePlaceholder( { className } ) {
 	);
 }
 
-function DefaultErrorResponsePlaceholder( { response, className } ) {
+function DefaultErrorResponsePlaceholder( { message, className } ) {
 	const errorMessage = sprintf(
 		// translators: %s: error message describing the problem
 		__( 'Error loading block: %s' ),
-		response.errorMsg
+		message
 	);
 	return <Placeholder className={ className }>{ errorMessage }</Placeholder>;
 }
@@ -66,6 +66,7 @@ function DefaultLoadingResponsePlaceholder( { children, isLoading } ) {
 }
 
 export default function ServerSideRender( props ) {
+	const prevHTMLtRef = useRef( '' );
 	const {
 		className,
 		EmptyResponsePlaceholder = DefaultEmptyResponsePlaceholder,
@@ -74,29 +75,34 @@ export default function ServerSideRender( props ) {
 		...restProps
 	} = props;
 
-	const { response, isLoading } = useServerSideRender( restProps );
+	const { html, status, error } = useServerSideRender( restProps );
 
-	const hasResponse = !! response;
-	const hasEmptyResponse = response === '';
-	const hasError = !! response?.error;
+	// Store the previous successful HTML response to show while loading.
+	useEffect( () => {
+		if ( html ) {
+			prevHTMLtRef.current = html;
+		}
+	}, [ html ] );
 
-	if ( isLoading ) {
+	if ( status === 'loading' ) {
 		return (
-			<LoadingResponsePlaceholder { ...props } isLoading={ isLoading }>
-				{ hasResponse && ! hasError && (
-					<RawHTML className={ className }>{ response }</RawHTML>
+			<LoadingResponsePlaceholder { ...props } isLoading>
+				{ prevHTMLtRef.current && (
+					<RawHTML className={ className }>
+						{ prevHTMLtRef.current }
+					</RawHTML>
 				) }
 			</LoadingResponsePlaceholder>
 		);
 	}
 
-	if ( hasEmptyResponse || ! hasResponse ) {
+	if ( status === 'success' && ! html ) {
 		return <EmptyResponsePlaceholder { ...props } />;
 	}
 
-	if ( hasError ) {
-		return <ErrorResponsePlaceholder response={ response } { ...props } />;
+	if ( status === 'error' ) {
+		return <ErrorResponsePlaceholder message={ error } { ...props } />;
 	}
 
-	return <RawHTML className={ className }>{ response }</RawHTML>;
+	return <RawHTML className={ className }>{ html }</RawHTML>;
 }
